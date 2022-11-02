@@ -1,5 +1,7 @@
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.5.11")
 
+addSbtPlugin("com.dwijnand" % "sbt-project-graph" % "0.4.0")
+
 // For the Cross Build
 addSbtPlugin("org.scala-js"       % "sbt-scalajs"              % "1.11.0")
 addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject" % "1.2.0")

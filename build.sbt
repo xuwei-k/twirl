@@ -19,7 +19,7 @@ def parserCombinators(scalaVersion: String) = "org.scala-lang.modules" %% "scala
   }
 }
 
-val mimaSettings = Seq(
+val mimaSettings = Def.settings(
   mimaPreviousArtifacts := {
     CrossVersion.partialVersion(scalaVersion.value) match {
       // No release for Scala 3 yet
@@ -27,6 +27,7 @@ val mimaSettings = Seq(
       case _            => previousVersion.map(organization.value %% name.value % _).toSet
     }
   },
+ 
   mimaBinaryIssueFilters ++= Seq(
     ProblemFilters.exclude[Problem]("play.twirl.parser.*"),
     ProblemFilters.exclude[MissingClassProblem]("play.twirl.compiler.*"),
@@ -43,15 +44,6 @@ Global / onLoad := (Global / onLoad).value.andThen { s =>
   dynverAssertTagVersion.value
   s
 }
-
-lazy val twirl = project
-  .in(file("."))
-  .disablePlugins(MimaPlugin)
-  .settings(
-    crossScalaVersions := Nil, // workaround so + uses project-defined variants
-    publish / skip     := true
-  )
-  .aggregate(apiJvm, apiJs, parser, compiler, plugin)
 
 lazy val nodeJs = {
   if (System.getProperty("NODE_PATH") != null)
@@ -110,22 +102,35 @@ lazy val compiler = project
       CrossVersion.partialVersion(scalaVersion.value) match {
         case Some((2, _)) =>
           // only for scala < 3
-          Seq("org.scala-lang" % "scala-compiler" % scalaVersion.value)
-        case _ => Seq("org.scala-lang" %% "scala3-compiler" % scalaVersion.value)
+          Seq("org.scala-lang" % "scala-compiler" % scalaVersion.value % Test)
+        case _ => Seq("org.scala-lang" %% "scala3-compiler" % scalaVersion.value % Test)
       }
     },
     libraryDependencies += parserCombinators(scalaVersion.value) % Optional,
-    libraryDependencies += ("org.scalameta" %% "scalameta" % "4.6.0").cross(CrossVersion.for3Use2_13),
+    libraryDependencies += ("org.scalameta" %% "parsers" % "4.6.0").cross(CrossVersion.for3Use2_13),
     run / fork := true
   )
-  .aggregate(apiJvm, parser)
-  .dependsOn(apiJvm, parser % "compile->compile;test->test")
+  .dependsOn(parser % "compile->compile;test->test")
 
 lazy val plugin = project
   .in(file("sbt-twirl"))
   .enablePlugins(SbtPlugin)
   .dependsOn(compiler)
   .settings(
+    Seq(Compile, Test).map { x =>
+  (x / TaskKey[File]("dependencySvg")) := {
+    import scala.sys.process.Process
+    val output = target.value / s"dependencies-${x.name}.svg"
+    Process(Seq(
+      "dot",
+      "-o" + output.getAbsolutePath,
+      "-Tsvg",
+      (x / sbt.plugins.DependencyTreeKeys.dependencyDot).value.getAbsolutePath
+    )).!
+    Process(Seq("open", output.getAbsolutePath)).!
+    output
+  }
+},
     name                                    := "sbt-twirl",
     organization                            := "com.typesafe.play",
     scalaVersion                            := Scala212,
